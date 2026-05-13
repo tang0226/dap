@@ -50,6 +50,44 @@ new TestSuite('dapCtx.n()', {
 
 }).runTests();
 
+new TestSuite('dapCtx.toString()', {
+  'zero': () =>
+    assertDeepEqual(ctx.toString(ctx.n(0n, 0)), '0'),
+
+  'integer (e === prec)': () =>
+    // 1234567 — decPt == d, no decimal point or trailing zeros
+    assertDeepEqual(ctx.toString(ctx.n(1234567n, 7)), '1234567'),
+
+  'integer, trailing zeros (e > prec)': () =>
+    // 12345670 — decPt > d, one trailing zero
+    assertDeepEqual(ctx.toString(ctx.n(1234567n, 8)), '12345670'),
+
+  'decimal point in middle': () =>
+    assertDeepEqual(ctx.toString(ctx.n(1234567n, 4)), '1234.567'),
+
+  'one integer digit (e === 1)': () =>
+    assertDeepEqual(ctx.toString(ctx.n(1234567n, 1)), '1.234567'),
+
+  'pure fraction (e === 0)': () =>
+    // decPt = 0 — all digits are fractional
+    assertDeepEqual(ctx.toString(ctx.n(5n, 0)), '0.5000000'),
+
+  'leading fractional zeros (e < 0)': () =>
+    // e=-2 → decPt=-2 → two leading zeros after "0."
+    assertDeepEqual(ctx.toString(ctx.n(1234567n, -2)), '0.001234567'),
+
+  'negative, decimal in middle': () =>
+    assertDeepEqual(ctx.toString(ctx.n(-1234567n, 4)), '-1234.567'),
+
+  'negative, pure fraction': () =>
+    assertDeepEqual(ctx.toString(ctx.n(-5n, 0)), '-0.5000000'),
+
+  'non-canonical m (sub-prec digits)': () =>
+    // cancellation result {m: 1000n, e: 3} = 0.1 — d=4, decPt=0
+    assertDeepEqual(ctx.toString(n(1000n, 3)), '0.1000'),
+
+}).runTests();
+
 new TestSuite('dapCtx.add()', {
   'same exponent': () =>
     // 1.5 + 2.5 = 4.0

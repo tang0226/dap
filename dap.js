@@ -35,6 +35,26 @@ export class dapCtx {
     return { m: normalized, e };
   }
 
+  toString(a) {
+    if (a.m === 0n) return '0';
+    const neg = a.m < 0n;
+    const abs = neg ? -a.m : a.m;
+    const s = String(abs);
+    const d = s.length;
+    const decPt = d - this.prec + a.e; // digits before the decimal point
+
+    let result;
+    if (decPt >= d) {
+      result = s + '0'.repeat(decPt - d);
+    } else if (decPt > 0) {
+      result = s.slice(0, decPt) + '.' + s.slice(decPt);
+    } else {
+      result = '0.' + '0'.repeat(-decPt) + s;
+    }
+
+    return neg ? '-' + result : result;
+  }
+
   add(a, b) {
     // Ensure a has the larger (or equal) exponent
     if (a.e < b.e) {
