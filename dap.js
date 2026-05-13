@@ -120,34 +120,6 @@ export class dapCtx {
     return { m, e };
   }
 
-  div(a, b) {
-    // a.m * 10^(a.e-prec) / (b.m * 10^(b.e-prec)) = (a.m/b.m) * 10^(a.e-b.e)
-    // Multiply a.m by base before dividing so q has prec (or prec+1) digits.
-    // q >= base  →  prec+1 digits, drop last with rounding,  e = a.e - b.e + 1
-    // q <  base  →  prec   digits, round on fractional rem,  e = a.e - b.e
-    const sign = (a.m < 0n) !== (b.m < 0n);
-    const absA = a.m < 0n ? -a.m : a.m;
-    const absB = b.m < 0n ? -b.m : b.m;
-
-    const dividend = absA * this.base;
-    const q = dividend / absB;
-    const rem = dividend % absB;
-
-    let m, e;
-    if (q >= this.base) {
-      const r = q % 10n;
-      m = q / 10n + (r >= 5n ? 1n : 0n);
-      e = a.e - b.e + 1;
-    } else {
-      m = q + (rem * 2n >= absB ? 1n : 0n);
-      e = a.e - b.e;
-    }
-
-    if (m >= this.base) { m /= 10n; e++; }
-
-    return { m: sign ? -m : m, e };
-  }
-
   sub(a, b) {
     return this.add(a, { m: -b.m, e: b.e });
   }
@@ -189,5 +161,33 @@ export class dapCtx {
     }
 
     return { m, e };
+  }
+
+  div(a, b) {
+    // a.m * 10^(a.e-prec) / (b.m * 10^(b.e-prec)) = (a.m/b.m) * 10^(a.e-b.e)
+    // Multiply a.m by base before dividing so q has prec (or prec+1) digits.
+    // q >= base  →  prec+1 digits, drop last with rounding,  e = a.e - b.e + 1
+    // q <  base  →  prec   digits, round on fractional rem,  e = a.e - b.e
+    const sign = (a.m < 0n) !== (b.m < 0n);
+    const absA = a.m < 0n ? -a.m : a.m;
+    const absB = b.m < 0n ? -b.m : b.m;
+
+    const dividend = absA * this.base;
+    const q = dividend / absB;
+    const rem = dividend % absB;
+
+    let m, e;
+    if (q >= this.base) {
+      const r = q % 10n;
+      m = q / 10n + (r >= 5n ? 1n : 0n);
+      e = a.e - b.e + 1;
+    } else {
+      m = q + (rem * 2n >= absB ? 1n : 0n);
+      e = a.e - b.e;
+    }
+
+    if (m >= this.base) { m /= 10n; e++; }
+
+    return { m: sign ? -m : m, e };
   }
 }
