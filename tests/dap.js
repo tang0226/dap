@@ -81,3 +81,62 @@ new TestSuite('dapCtx.sub()', {
     assertDeepEqual(ctx.sub(n(1234567n, 2), n(0n, 0)), n(1234567n, 2)),
 
 }).runTests();
+
+const ctx3 = new dapCtx(3);
+
+new TestSuite('dapCtx.mul()', {
+  // --- prec-1 branch: mProd has 2*prec-1 = 13 digits ---
+
+  'prec-1, no round': () =>
+    // 2.0 × 3.0 = 6.0 — rem=0, nothing to round
+    assertDeepEqual(ctx.mul(n(2000000n, 1), n(3000000n, 1)), n(6000000n, 1)),
+
+  'prec-1, digit extraction, no round': () =>
+    // 12.34567 × 10.00001 = 123.4568 — pulls digit 8 from rem, second digit 2 < 5
+    assertDeepEqual(ctx.mul(n(1234567n, 2), n(1000001n, 2)), n(1234568n, 3)),
+
+  'prec-1, rounds up': () =>
+    // pi × e ≈ 8.539736 — pulls digit 5 from rem, second digit 7 rounds up
+    assertDeepEqual(ctx.mul(n(3141593n, 1), n(2718282n, 1)), n(8539736n, 1)),
+
+  'prec-1, different exponents': () =>
+    // 200.0 × 30.0 = 6000.0
+    assertDeepEqual(ctx.mul(n(2000000n, 3), n(3000000n, 2)), n(6000000n, 4)),
+
+  'prec-1, identity': () =>
+    // 12.34567 × 1.0 = 12.34567
+    assertDeepEqual(ctx.mul(n(1234567n, 2), n(1000000n, 1)), n(1234567n, 2)),
+
+  // --- prec branch: mProd has 2*prec = 14 digits ---
+
+  'prec, no round': () =>
+    // 99.99999² ≈ 9999.998 — rem=1, well below halfBase
+    assertDeepEqual(ctx.mul(n(9999999n, 2), n(9999999n, 2)), n(9999998n, 4)),
+
+  'prec, rounds up': () =>
+    // 90.00001 × 5.556000 ≈ 500.0401 — rem=5556000 >= halfBase=5000000
+    assertDeepEqual(ctx.mul(n(9000001n, 2), n(5556000n, 1)), n(5000401n, 3)),
+
+  // --- signs ---
+
+  'negative × positive': () =>
+    // -3.0 × 2.0 = -6.0
+    assertDeepEqual(ctx.mul(n(-3000000n, 1), n(2000000n, 1)), n(-6000000n, 1)),
+
+  'negative × negative': () =>
+    // -2.0 × -3.0 = 6.0
+    assertDeepEqual(ctx.mul(n(-2000000n, 1), n(-3000000n, 1)), n(6000000n, 1)),
+
+  'prec, negative rounds up': () =>
+    // -90.00001 × 5.556 ≈ -500.0401 — same magnitudes as positive case
+    assertDeepEqual(ctx.mul(n(-9000001n, 2), n(5556000n, 1)), n(-5000401n, 3)),
+
+  // --- overflow handler (prec-1 branch rounds m up to base) ---
+  // Requires prec=3 where reachable: 10.1 × 990 = 9999 → rounds to 10000
+  // mProd=99990, m_initial=99, rem=990; pulls digit 9, second digit 9 rounds
+  // 999 → 1000 = base → overflow handler fires → m=100, e++
+
+  'prec-1 overflow handler (prec=3)': () =>
+    assertDeepEqual(ctx3.mul(n(101n, 2), n(990n, 3)), n(100n, 5)),
+
+}).runTests();

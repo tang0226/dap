@@ -3,12 +3,17 @@ export class dapCtx {
     this.prec = prec;
     this.base = 10n ** BigInt(this.prec);
     this.baseSq = this.base * this.base;
-    this.pow10 = new Array(prec + 1)
-    this.pow10[0] = 1n
+    this.halfBase = this.base / 2n;
+    this.pow10 = new Array(prec + 1);
+    this.halfPow10 = new Array(prec + 1);
+    this.pow10[0] = 1n;
+    this.halfPow10[0] = 0n;
     for (let i = 1; i < prec; i++) {
-      this.pow10[i] = this.pow10[i - 1] * 10n  // multiply by single digit each step
+      this.pow10[i] = this.pow10[i - 1] * 10n;
+      this.halfPow10[i] = this.pow10[i] / 2n;  // = 5n * pow10[i-1], no allocation at lookup
     }
     this.pow10[prec] = this.base;
+    this.halfPow10[prec] = this.halfBase;
   }
 
 
@@ -33,7 +38,7 @@ export class dapCtx {
       const rem = b.m % this.pow10[shift];
       const absRem = rem < 0n ? -rem : rem;
       // Round half-away-from-zero on the dropped digits
-      if (absRem * 2n >= this.pow10[shift]) {
+      if (absRem >= this.halfPow10[shift]) {
         bAligned += b.m >= 0n ? 1n : -1n;
       }
     }
@@ -52,4 +57,46 @@ export class dapCtx {
     return { m, e };
   }
 
+  sub(a, b) {
+    return this.add(a, { m: -b.m, e: b.e });
+  }
+
+  mul(a, b) {
+    // a.m * 10^(a.e - prec) * b.m * 10^(b.e - prec)
+    // = (a.m * b.m) * 10^(a.e + b.e - 2prec)
+    // = (a.m * b.m) / 10^prec * 10^(a.e + b.e - prec)  (2prec digs in mProd)
+    // = (a.m * b.m) / 10^(prec-1) * 10^(a.e + b.e - prec - 1) (2prec-1 digs in mProd)
+
+    const mProd = a.m * b.m; // 2prec or 2prec-1 digs
+    const rem = mProd % this.base; // lower prec digs, same sign as mProd
+    const absRem = rem < 0n ? -rem : rem;
+    let m = mProd / this.base; // prec or prec-1 digs
+    const absM = m < 0n ? -m : m;
+    let e = a.e + b.e; // er = ea + eb - prec + d; base assumes d=prec, else branch subtracts 1
+
+    if (absM >= this.pow10[this.prec - 1]) {
+      // mProd had 2prec digits — m already has prec digits, just round
+      if (absRem >= this.halfBase) {
+        m += m > 0n ? 1n : -1n;
+      }
+    } else {
+      // mProd had 2prec-1 digits — pull one digit from rem into m
+      e--;
+      const remTwoDigs = absRem / this.pow10[this.prec - 2];
+      m = m * 10n + (m >= 0n ? 1n : -1n) * (remTwoDigs / 10n);
+      if (remTwoDigs % 10n >= 5n) {
+        m += m > 0n ? 1n : -1n;
+      }
+    }
+
+    // Rounding in the prec-1 branch can push m to base — normalize one more digit
+    if (m >= this.base || m <= -this.base) {
+      const r = m % 10n;
+      const absR = r < 0n ? -r : r;
+      m = m / 10n + (absR >= 5n ? (m > 0n ? 1n : -1n) : 0n);
+      e++;
+    }
+
+    return { m, e };
+  }
 }
