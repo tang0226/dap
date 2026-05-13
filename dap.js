@@ -17,6 +17,31 @@ export class dapCtx {
   }
 
   n(m, e) {
+    if (typeof m === 'number') m = String(m);
+    if (typeof m === 'string') {
+      const neg = m[0] === '-';
+      const s = neg ? m.slice(1) : m;
+      const dot = s.indexOf('.');
+      const intPart = (dot === -1 ? s : s.slice(0, dot)) || '0';
+      const fracPart = dot === -1 ? '' : s.slice(dot + 1);
+      // e: integer digit count for values >=1, or -(leading frac zeros) for <1
+      let eVal;
+      if (intPart !== '0') {
+        eVal = intPart.length;
+      } else {
+        let z = 0;
+        while (z < fracPart.length && fracPart[z] === '0') z++;
+        eVal = -z;
+      }
+      // strip leading zeros to get the raw significant digit string
+      const raw = intPart + fracPart;
+      let i = 0;
+      while (i < raw.length && raw[i] === '0') i++;
+      if (i === raw.length) return { m: 0n, e: 0 };
+      const mBig = neg ? -BigInt(raw.slice(i)) : BigInt(raw.slice(i));
+      return this.n(mBig, eVal);
+    }
+    // BigInt path
     if (m === 0n) return { m: 0n, e };
     const neg = m < 0n;
     const abs = neg ? -m : m;

@@ -48,6 +48,54 @@ new TestSuite('dapCtx.n()', {
   'negative, rounding overflow': () =>
     assertDeepEqual(ctx.n(-99999995n, 2), n(-1000000n, 3)),
 
+  // --- string inputs ---
+
+  'string: integer': () =>
+    // "100" → e=3, pads to 1000000
+    assertDeepEqual(ctx.n('100'), n(1000000n, 3)),
+
+  'string: decimal, fewer digits than prec': () =>
+    // "3.14" → pads to 3140000
+    assertDeepEqual(ctx.n('3.14'), n(3140000n, 1)),
+
+  'string: decimal, exact prec digits': () =>
+    assertDeepEqual(ctx.n('1234.567'), n(1234567n, 4)),
+
+  'string: decimal, more digits than prec (rounds)': () =>
+    // π to 10 digits → rounds to 7
+    assertDeepEqual(ctx.n('3.1415926535'), n(3141593n, 1)),
+
+  'string: pure fraction (e === 0)': () =>
+    assertDeepEqual(ctx.n('0.5'), n(5000000n, 0)),
+
+  'string: leading fractional zeros (e < 0)': () =>
+    // "0.001" → z=2 leading zeros → e=-2
+    assertDeepEqual(ctx.n('0.001'), n(1000000n, -2)),
+
+  'string: zero': () =>
+    assertDeepEqual(ctx.n('0'), n(0n, 0)),
+
+  'string: negative': () =>
+    assertDeepEqual(ctx.n('-42.5'), n(-4250000n, 2)),
+
+  'string: rounding overflow': () =>
+    // 9.9999995 rounds up to 10.000000 — e increments
+    assertDeepEqual(ctx.n('9.9999995'), n(1000000n, 2)),
+
+  // --- number inputs ---
+
+  'number: integer': () =>
+    assertDeepEqual(ctx.n(100), n(1000000n, 3)),
+
+  'number: float': () =>
+    assertDeepEqual(ctx.n(3.14), n(3140000n, 1)),
+
+  'number: zero': () =>
+    assertDeepEqual(ctx.n(0), n(0n, 0)),
+
+  'number: negative float': () =>
+    assertDeepEqual(ctx.n(-42.5), n(-4250000n, 2)),
+
 }).runTests();
 
 new TestSuite('dapCtx.toString()', {
