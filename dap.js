@@ -16,6 +16,24 @@ export class dapCtx {
     this.halfPow10[prec] = this.halfBase;
   }
 
+  n(m, e) {
+    if (m === 0n) return { m: 0n, e };
+    const neg = m < 0n;
+    const abs = neg ? -m : m;
+    const digits = String(abs).length;
+    const diff = digits - this.prec;
+    if (diff === 0) return { m, e };
+    if (diff < 0) return { m: m * this.pow10[-diff], e };
+    // digits > prec: truncate with rounding
+    const divisor = 10n ** BigInt(diff);
+    const rem = abs % divisor;
+    let normalized = m / divisor;
+    if (rem >= divisor / 2n) normalized += neg ? -1n : 1n;
+    // overflow: e.g. 9.9999995 with prec=7 rounds to 10.000000
+    const absNorm = normalized < 0n ? -normalized : normalized;
+    if (absNorm >= this.base) { normalized /= 10n; e++; }
+    return { m: normalized, e };
+  }
 
   add(a, b) {
     // Ensure a has the larger (or equal) exponent
