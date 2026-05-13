@@ -271,3 +271,77 @@ new TestSuite('dapCtx.mul()', {
     assertDeepEqual(ctx3.mul(ctx3.n(101n, 2), ctx3.n(990n, 3)), ctx3.n(100n, 5)),
 
 }).runTests();
+
+new TestSuite('dapCtx.div()', {
+  // --- prec+1 branch: q = floor(|a.m| * base / |b.m|) has prec+1 digits ---
+
+  'prec+1, no round': () =>
+    // 6.0 / 2.0 = 3.0 — q=30000000, r=0
+    assertDeepEqual(ctx.div(ctx.n('6'), ctx.n('2')), ctx.n('3')),
+
+  'prec+1, no round (non-trivial)': () =>
+    // 7.0 / 2.0 = 3.5 — q=35000000, r=0
+    assertDeepEqual(ctx.div(ctx.n('7'), ctx.n('2')), ctx.n('3.5')),
+
+  'prec+1, rounds up': () =>
+    // 5.0 / 3.0 = 1.666667 — q=16666666, r=6 ≥ 5
+    assertDeepEqual(ctx.div(ctx.n('5'), ctx.n('3')), ctx.n('1.666667')),
+
+  'prec+1, q === base (a === b)': () =>
+    // 5.0 / 5.0 = 1.0 — q=base exactly, r=0
+    assertDeepEqual(ctx.div(ctx.n('5'), ctx.n('5')), ctx.n('1')),
+
+  // --- prec branch: q has prec digits (|a.m| < |b.m|) ---
+
+  'prec, no round': () =>
+    // 1.0 / 3.0 = 0.3333333 — 2*rem=2000000 < absB=3000000
+    assertDeepEqual(ctx.div(ctx.n('1'), ctx.n('3')), ctx.n('0.3333333')),
+
+  'prec, no round (different divisor)': () =>
+    // 1.0 / 7.0 = 0.1428571 — 2*rem=6000000 < absB=7000000
+    assertDeepEqual(ctx.div(ctx.n('1'), ctx.n('7')), ctx.n('0.1428571')),
+
+  'prec, rounds up': () =>
+    // 2.0 / 3.0 = 0.6666667 — 2*rem=4000000 ≥ absB=3000000
+    assertDeepEqual(ctx.div(ctx.n('2'), ctx.n('3')), ctx.n('0.6666667')),
+
+  // --- exponent ---
+
+  'identity': () =>
+    // 12.34567 / 1.0 = 12.34567
+    assertDeepEqual(ctx.div(ctx.n(1234567n, 2), ctx.n('1')), ctx.n(1234567n, 2)),
+
+  'a.e > b.e': () =>
+    // 100.0 / 3.0 = 33.33333 — e = 3−1 = 2
+    assertDeepEqual(ctx.div(ctx.n('100'), ctx.n('3')), ctx.n('33.33333')),
+
+  'a.e < b.e': () =>
+    // 1.0 / 100.0 = 0.01 — e = 1−3+1 = −1
+    assertDeepEqual(ctx.div(ctx.n('1'), ctx.n('100')), ctx.n('0.01')),
+
+  'a.e >> b.e': () =>
+    // 1000.0 / 2.0 = 500.0 — prec branch, e = 4−1 = 3
+    assertDeepEqual(ctx.div(ctx.n('1000'), ctx.n('2')), ctx.n('500')),
+
+  // --- signs ---
+
+  'negative ÷ positive': () =>
+    assertDeepEqual(ctx.div(ctx.n('-6'), ctx.n('2')), ctx.n('-3')),
+
+  'positive ÷ negative': () =>
+    assertDeepEqual(ctx.div(ctx.n('6'), ctx.n('-2')), ctx.n('-3')),
+
+  'negative ÷ negative': () =>
+    assertDeepEqual(ctx.div(ctx.n('-6'), ctx.n('-2')), ctx.n('3')),
+
+  'negative, prec rounds up': () =>
+    // −2.0 / 3.0 = −0.6666667 — same magnitude as positive case, sign applied after
+    assertDeepEqual(ctx.div(ctx.n('-2'), ctx.n('3')), ctx.n('-0.6666667')),
+
+  // --- zero ---
+
+  'zero numerator': () =>
+    // 0 / 5.0 — m=0, e = a.e − b.e = 0−1 = −1 (non-canonical zero)
+    assertDeepEqual(ctx.div(ctx.n('0'), ctx.n('5')), n(0n, -1)),
+
+}).runTests();
