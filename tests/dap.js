@@ -345,3 +345,55 @@ new TestSuite('dapCtx.div()', {
     assertDeepEqual(ctx.div(ctx.n('0'), ctx.n('5')), n(0n, -1)),
 
 }).runTests();
+
+new TestSuite('dapCtx.sqrt()', {
+  'zero': () =>
+    assertDeepEqual(ctx.sqrt(ctx.n('0')), n(0n, 0)),
+
+  // --- perfect squares (r=0, no rounding) ---
+
+  'sqrt(1) = 1 (odd e=1)': () =>
+    assertDeepEqual(ctx.sqrt(ctx.n('1')), ctx.n('1')),
+
+  'sqrt(4) = 2 (odd e=1)': () =>
+    assertDeepEqual(ctx.sqrt(ctx.n('4')), ctx.n('2')),
+
+  'sqrt(100) = 10 (odd e=3)': () =>
+    assertDeepEqual(ctx.sqrt(ctx.n('100')), ctx.n('10')),
+
+  'sqrt(0.25) = 0.5 (even e=0)': () =>
+    assertDeepEqual(ctx.sqrt(ctx.n('0.25')), ctx.n('0.5')),
+
+  // --- irrational, odd e (S = prec-1 branch) ---
+
+  'sqrt(2) ≈ 1.414214 (odd e, rounds up)': () =>
+    // isqrt=1414213, r=1590631 > x → rounds up
+    assertDeepEqual(ctx.sqrt(ctx.n('2')), ctx.n('1.414214')),
+
+  'sqrt(3) ≈ 1.732051 (odd e, rounds up)': () =>
+    // isqrt=1732050, r=2797500 > x → rounds up
+    assertDeepEqual(ctx.sqrt(ctx.n('3')), ctx.n('1.732051')),
+
+  // --- irrational, even e (S = prec branch) ---
+
+  'sqrt(10) ≈ 3.162278 (even e, rounds up)': () =>
+    // isqrt=3162277, r=4184471 > x → rounds up
+    assertDeepEqual(ctx.sqrt(ctx.n('10')), ctx.n('3.162278')),
+
+  'sqrt(0.5) ≈ 0.7071068 (even e, rounds up)': () =>
+    // isqrt=7071067, r=11481511 > x → rounds up
+    assertDeepEqual(ctx.sqrt(ctx.n('0.5')), ctx.n('0.7071068')),
+
+  // --- negative exponent ---
+
+  'sqrt(0.01) = 0.1 (odd e=-1)': () =>
+    assertDeepEqual(ctx.sqrt(ctx.n('0.01')), ctx.n('0.1')),
+
+  'sqrt(0.0004) = 0.02 (odd e=-3)': () =>
+    assertDeepEqual(ctx.sqrt(ctx.n('0.0004')), ctx.n('0.02')),
+
+}).runTests();
+
+let c = new dapCtx(10000);
+
+console.log(c.toString(c.sqrt(c.n(2059374))));

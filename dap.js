@@ -190,4 +190,38 @@ export class dapCtx {
 
     return { m: sign ? -m : m, e };
   }
+
+  sqrt(a) {
+    if (a.m === 0n) return { m: 0n, e: 0 };
+
+    // value = a.m * 10^(a.e - prec)
+    // sqrt(value) = sqrt(N) * 10^((a.e - prec - S) / 2), N = a.m * 10^S
+    // S chosen so (a.e - prec - S) is even:
+    //   a.e even → S = prec,   e_r = a.e >> 1
+    //   a.e odd  → S = prec-1, e_r = (a.e + 1) >> 1
+    // Both give N with 2*prec or 2*prec-1 digits, so isqrt(N) has prec digits.
+    const odd = (a.e & 1) !== 0;
+    const N = odd ? a.m * this.pow10[this.prec - 1] : a.m * this.base;
+    let e = odd ? (a.e + 1) >> 1 : a.e >> 1;
+
+    // Newton-Raphson integer sqrt — O(log prec) iterations
+    // a.m has exactly prec digits; extract top k as a float via cached pow10 divisor
+    const k = Math.min(15, this.prec);
+    const amTop = Number(a.m / this.pow10[this.prec - k]);
+    const tail = odd ? 2 * this.prec - 1 - k : 2 * this.prec - k; // total digits in N minus k
+    const floatN = tail % 2 === 0 ? amTop : amTop * 10;
+    let x = BigInt(Math.ceil(Math.sqrt(floatN))) * this.pow10[tail >> 1];
+    while (true) {
+      const x1 = (x + N / x) >> 1n;
+      if (x1 >= x) break;
+      x = x1;
+    }
+
+    // Ties never occur: sqrt of a non-perfect-square is irrational
+    const r = N - x * x;
+    let m = r > x ? x + 1n : x;
+    if (m >= this.base) { m /= 10n; e++; }
+
+    return { m, e };
+  }
 }
