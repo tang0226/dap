@@ -393,7 +393,3 @@ new TestSuite('dapCtx.sqrt()', {
     assertDeepEqual(ctx.sqrt(ctx.n('0.0004')), ctx.n('0.02')),
 
 }).runTests();
-
-let c = new dapCtx(10000);
-
-console.log(c.toString(c.sqrt(c.n(2059374))));
