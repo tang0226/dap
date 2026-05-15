@@ -224,4 +224,54 @@ export class dapCtx {
 
     return { m, e };
   }
+
+  neg(a) {
+    return { m: -a.m, e: a.e };
+  }
+
+  trunc(a) {
+    if (a.e < 0) return { m: 0n, e: 0 };
+    if (a.e >= this.prec) return a;
+    const frac = this.prec - a.e;
+    const q = a.m / this.pow10[frac];
+    if (q === 0n) return { m: 0n, e: 0 };
+    return this.n(q, a.e);
+  }
+
+  round(a) {
+    if (a.e < 0) return { m: 0n, e: 0 };
+    if (a.e >= this.prec) return a;
+    const frac = this.prec - a.e;
+    const rem = a.m % this.pow10[frac];
+    const absRem = rem < 0n ? -rem : rem;
+    let q = a.m / this.pow10[frac];
+    if (absRem >= this.halfPow10[frac]) q += a.m >= 0n ? 1n : -1n;
+    if (q === 0n) return { m: 0n, e: 0 };
+    const absQ = q < 0n ? -q : q;
+    return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
+  }
+
+  floor(a) {
+    if (a.e < 0) return a.m < 0n ? this.n(-1n, 1) : { m: 0n, e: 0 };
+    if (a.e >= this.prec) return a;
+    const frac = this.prec - a.e;
+    const rem = a.m % this.pow10[frac];
+    let q = a.m / this.pow10[frac];
+    if (rem < 0n) q -= 1n;
+    if (q === 0n) return { m: 0n, e: 0 };
+    const absQ = q < 0n ? -q : q;
+    return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
+  }
+
+  ceil(a) {
+    if (a.e < 0) return a.m > 0n ? this.n(1n, 1) : { m: 0n, e: 0 };
+    if (a.e >= this.prec) return a;
+    const frac = this.prec - a.e;
+    const rem = a.m % this.pow10[frac];
+    let q = a.m / this.pow10[frac];
+    if (rem > 0n) q += 1n;
+    if (q === 0n) return { m: 0n, e: 0 };
+    const absQ = q < 0n ? -q : q;
+    return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
+  }
 }

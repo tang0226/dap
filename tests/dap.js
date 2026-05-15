@@ -393,3 +393,162 @@ new TestSuite('dapCtx.sqrt()', {
     assertDeepEqual(ctx.sqrt(ctx.n('0.0004')), ctx.n('0.02')),
 
 }).runTests();
+
+new TestSuite('dapCtx.neg()', {
+  'zero': () =>
+    // -0n === 0n in BigInt, so result is canonical zero
+    assertDeepEqual(ctx.neg(ctx.n('0')), ctx.n('0')),
+
+  'negate positive': () =>
+    assertDeepEqual(ctx.neg(ctx.n('1234.567')), ctx.n('-1234.567')),
+
+  'negate negative': () =>
+    assertDeepEqual(ctx.neg(ctx.n('-1234.567')), ctx.n('1234.567')),
+
+  'exponent preserved': () =>
+    assertDeepEqual(ctx.neg(ctx.n('0.001')), ctx.n('-0.001')),
+
+}).runTests();
+
+new TestSuite('dapCtx.trunc()', {
+  'zero': () =>
+    assertDeepEqual(ctx.trunc(ctx.n('0')), n(0n, 0)),
+
+  'e < 0 (tiny fraction)': () =>
+    // value is in (-0.1, 0.1) — all digits fractional
+    assertDeepEqual(ctx.trunc(ctx.n('0.05')), n(0n, 0)),
+
+  'e = 0, positive (< 1)': () =>
+    assertDeepEqual(ctx.trunc(ctx.n('0.9999999')), n(0n, 0)),
+
+  'e = 0, negative (> -1)': () =>
+    // trunc rounds toward zero, so -0.9 → 0
+    assertDeepEqual(ctx.trunc(ctx.n('-0.9999999')), n(0n, 0)),
+
+  'positive decimal': () =>
+    assertDeepEqual(ctx.trunc(ctx.n('1234.567')), ctx.n('1234')),
+
+  'negative decimal (toward zero, not floor)': () =>
+    // -1234.567 truncates to -1234, not -1235
+    assertDeepEqual(ctx.trunc(ctx.n('-1234.567')), ctx.n('-1234')),
+
+  'exact integer (e < prec)': () =>
+    assertDeepEqual(ctx.trunc(ctx.n('1234')), ctx.n('1234')),
+
+  'large integer (e >= prec, returned as-is)': () =>
+    assertDeepEqual(ctx.trunc(ctx.n('12345670')), ctx.n('12345670')),
+
+}).runTests();
+
+new TestSuite('dapCtx.round()', {
+  'zero': () =>
+    assertDeepEqual(ctx.round(ctx.n('0')), n(0n, 0)),
+
+  'e < 0 (|value| < 0.1, always zero)': () =>
+    assertDeepEqual(ctx.round(ctx.n('0.05')), n(0n, 0)),
+
+  'e = 0, rounds up (0.5 → 1)': () =>
+    // half-away-from-zero: 0.5 rounds to 1
+    assertDeepEqual(ctx.round(ctx.n('0.5')), ctx.n('1')),
+
+  'e = 0, no round (< 0.5)': () =>
+    assertDeepEqual(ctx.round(ctx.n('0.4999999')), n(0n, 0)),
+
+  'e = 0, negative rounds away from zero (-0.5 → -1)': () =>
+    assertDeepEqual(ctx.round(ctx.n('-0.5')), ctx.n('-1')),
+
+  'positive, rounds up': () =>
+    // 1234.5 → rem=500 >= halfPow10[3]=500
+    assertDeepEqual(ctx.round(ctx.n('1234.5')), ctx.n('1235')),
+
+  'positive, no round': () =>
+    // 1234.499 → rem=499 < 500
+    assertDeepEqual(ctx.round(ctx.n('1234.499')), ctx.n('1234')),
+
+  'negative, rounds away from zero': () =>
+    assertDeepEqual(ctx.round(ctx.n('-1234.5')), ctx.n('-1235')),
+
+  'negative, no round': () =>
+    assertDeepEqual(ctx.round(ctx.n('-1234.499')), ctx.n('-1234')),
+
+  'carry into new digit (9.5 → 10)': () =>
+    // q = 9+1 = 10 >= pow10[1] → e increments from 1 to 2
+    assertDeepEqual(ctx.round(ctx.n('9.5')), ctx.n('10')),
+
+  'exact integer (e >= prec, returned as-is)': () =>
+    assertDeepEqual(ctx.round(ctx.n('1234567')), ctx.n('1234567')),
+
+}).runTests();
+
+new TestSuite('dapCtx.floor()', {
+  'zero': () =>
+    assertDeepEqual(ctx.floor(ctx.n('0')), n(0n, 0)),
+
+  'e < 0, positive fraction → 0': () =>
+    assertDeepEqual(ctx.floor(ctx.n('0.05')), n(0n, 0)),
+
+  'e < 0, negative fraction → -1': () =>
+    // any negative value in (-0.1, 0) floors to -1
+    assertDeepEqual(ctx.floor(ctx.n('-0.05')), ctx.n('-1')),
+
+  'e = 0, positive (< 1) → 0': () =>
+    assertDeepEqual(ctx.floor(ctx.n('0.9999999')), n(0n, 0)),
+
+  'e = 0, negative (> -1) → -1': () =>
+    // even a tiny negative value floors to -1
+    assertDeepEqual(ctx.floor(ctx.n('-0.0000001')), ctx.n('-1')),
+
+  'positive decimal': () =>
+    assertDeepEqual(ctx.floor(ctx.n('1234.001')), ctx.n('1234')),
+
+  'positive exact integer': () =>
+    assertDeepEqual(ctx.floor(ctx.n('1234')), ctx.n('1234')),
+
+  'negative decimal (floors down, away from zero)': () =>
+    // -1234.001 floors to -1235, not -1234
+    assertDeepEqual(ctx.floor(ctx.n('-1234.001')), ctx.n('-1235')),
+
+  'negative exact integer': () =>
+    assertDeepEqual(ctx.floor(ctx.n('-1234')), ctx.n('-1234')),
+
+  'carry into new digit (-9.1 → -10)': () =>
+    // q = -9, rem < 0 → q = -10 >= pow10[1] → e increments
+    assertDeepEqual(ctx.floor(ctx.n('-9.1')), ctx.n('-10')),
+
+}).runTests();
+
+new TestSuite('dapCtx.ceil()', {
+  'zero': () =>
+    assertDeepEqual(ctx.ceil(ctx.n('0')), n(0n, 0)),
+
+  'e < 0, positive fraction → 1': () =>
+    // any positive value in (0, 0.1) ceils to 1
+    assertDeepEqual(ctx.ceil(ctx.n('0.05')), ctx.n('1')),
+
+  'e < 0, negative fraction → 0': () =>
+    assertDeepEqual(ctx.ceil(ctx.n('-0.05')), n(0n, 0)),
+
+  'e = 0, positive (> 0) → 1': () =>
+    assertDeepEqual(ctx.ceil(ctx.n('0.0000001')), ctx.n('1')),
+
+  'e = 0, negative (> -1) → 0': () =>
+    assertDeepEqual(ctx.ceil(ctx.n('-0.9999999')), n(0n, 0)),
+
+  'positive decimal': () =>
+    assertDeepEqual(ctx.ceil(ctx.n('1234.001')), ctx.n('1235')),
+
+  'positive exact integer': () =>
+    assertDeepEqual(ctx.ceil(ctx.n('1234')), ctx.n('1234')),
+
+  'negative decimal (ceils toward zero)': () =>
+    // -1234.567 ceils to -1234
+    assertDeepEqual(ctx.ceil(ctx.n('-1234.567')), ctx.n('-1234')),
+
+  'negative exact integer': () =>
+    assertDeepEqual(ctx.ceil(ctx.n('-1234')), ctx.n('-1234')),
+
+  'carry into new digit (9.1 → 10)': () =>
+    // q = 9+1 = 10 >= pow10[1] → e increments
+    assertDeepEqual(ctx.ceil(ctx.n('9.1')), ctx.n('10')),
+
+}).runTests();
