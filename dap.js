@@ -279,4 +279,102 @@ export class dapCtx {
   mod(a, b) {
     return this.sub(a, this.mul(b, this.floor(this.div(a, b))));
   }
+
+  // Returns 1 if a > b, -1 if a < b, 0 if equal
+  cmp(a, b) {
+    const d = this.sub(a, b);
+    return d.m > 0n ? 1 : d.m < 0n ? -1 : 0;
+  }
+
+  // atanh(t) = t + t^3/3 + t^5/5 + ..., |t| < 1
+  atanh(t) {
+    const t2 = this.mul(t, t);
+    let term = t;
+    let sum = t;
+    for (let i = 1; ; i++) {
+      term = this.mul(term, t2);
+      if (term.m === 0n) break;
+      const delta = this.div(term, this.n(String(2 * i + 1)));
+      if (delta.m === 0n) break;
+      const prev = sum;
+      sum = this.add(sum, delta);
+      if (sum.m === prev.m && sum.e === prev.e) break;
+    }
+    return sum;
+  }
+
+  ln(a) {
+    if (a.m <= 0n) throw new Error('ln: argument must be positive');
+    // Write a = r * 2^k * 10^(a.e-1), r ∈ [1,2)
+    // ln(a) = 2*atanh((r-1)/(r+1)) + k*ln(2) + (a.e-1)*ln(10)
+    const expShift = a.e - 1;
+    let r = { m: a.m, e: 1 }; // value in [1, 10)
+
+    const one = this.n('1');
+    const two = this.n('2');
+    const three = this.n('3');
+    let k = 0;
+    while (this.cmp(r, two) >= 0) { r = this.div(r, two); k++; }
+
+    const t = this.div(this.sub(r, one), this.add(r, one));
+    let result = this.mul(two, this.atanh(t));
+
+    if (k !== 0 || expShift !== 0) {
+      const ln2 = this.mul(two, this.atanh(this.div(one, three)));
+      if (k !== 0) result = this.add(result, this.mul(this.n(String(k)), ln2));
+      if (expShift !== 0) {
+        const five = this.n('5');
+        const ln5 = this.mul(two, this.atanh(this.div(this.sub(five, one), this.add(five, one))));
+        result = this.add(result, this.mul(this.n(String(expShift)), this.add(ln2, ln5)));
+      }
+    }
+    return result;
+  }
+
+  exp(a) {
+    if (a.m === 0n) return this.n('1');
+    // Negative: use exp(-x) = 1/exp(x) to avoid cancellation in the alternating series
+    if (a.m < 0n) return this.div(this.n('1'), this.exp(this.neg(a)));
+    // Direct Taylor series: 1 + x + x^2/2! + ..., all terms positive for x > 0
+    const one = this.n('1');
+    let sum = this.add(one, a);
+    let term = a;
+    for (let i = 2; i <= 6 * this.prec; i++) {
+      term = this.div(this.mul(term, a), this.n(String(i)));
+      if (term.m === 0n) break;
+      const prev = sum;
+      sum = this.add(sum, term);
+      if (sum.m === prev.m && sum.e === prev.e) break;
+    }
+    return sum;
+  }
+
+  pow(a, b) {
+    if (b.m === 0n) return this.n('1');
+    if (a.m === 0n) return { m: 0n, e: 0 };
+
+    // Integer exponent: binary exponentiation
+    const bIsInt = b.e >= 1 && (b.e >= this.prec || b.m % this.pow10[this.prec - b.e] === 0n);
+    if (bIsInt) {
+      const bInt = b.e >= this.prec
+        ? b.m * 10n ** BigInt(b.e - this.prec)
+        : b.m / this.pow10[this.prec - b.e];
+      const neg = bInt < 0n;
+      const abs = neg ? -bInt : bInt;
+      const one = this.n('1');
+      let result = one;
+      let base = a;
+      let exp = abs;
+      while (exp > 0n) {
+        if (exp & 1n) result = this.mul(result, base);
+        base = this.mul(base, base);
+        exp >>= 1n;
+      }
+      return neg ? this.div(one, result) : result;
+    }
+
+    // Non-integer exponent: a^b = exp(b * ln(a)); requires a > 0
+    if (a.m < 0n) throw new Error('pow: non-integer exponent requires positive base');
+    return this.exp(this.mul(b, this.ln(a)));
+  }
 }
