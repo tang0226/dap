@@ -274,4 +274,9 @@ export class dapCtx {
     const absQ = q < 0n ? -q : q;
     return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
   }
+
+  // Floored modulo: result has the same sign as b (a - b*floor(a/b))
+  mod(a, b) {
+    return this.sub(a, this.mul(b, this.floor(this.div(a, b))));
+  }
 }

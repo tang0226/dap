@@ -552,3 +552,38 @@ new TestSuite('dapCtx.ceil()', {
     assertDeepEqual(ctx.ceil(ctx.n('9.1')), ctx.n('10')),
 
 }).runTests();
+
+new TestSuite('dapCtx.mod()', {
+  'basic': () =>
+    // 7 - 3*floor(7/3) = 7 - 6 = 1
+    assertDeepEqual(ctx.mod(ctx.n('7'), ctx.n('3')), ctx.n('1')),
+
+  'exact multiple (zero result)': () =>
+    // cancellation in sub leaves non-canonical zero with inherited e
+    assertDeepEqual(ctx.mod(ctx.n('9'), ctx.n('3')), n(0n, 1)),
+
+  'dividend < divisor (result = dividend)': () =>
+    // floor(2/5)=0, so result is just 2
+    assertDeepEqual(ctx.mod(ctx.n('2'), ctx.n('5')), ctx.n('2')),
+
+  'negative dividend, positive divisor': () =>
+    // floor(-7/3) = floor(-2.333) = -3; -7 - 3*(-3) = 2 — result is positive
+    assertDeepEqual(ctx.mod(ctx.n('-7'), ctx.n('3')), ctx.n('2')),
+
+  'positive dividend, negative divisor': () =>
+    // floor(7/-3) = floor(-2.333) = -3; 7 - (-3)*(-3) = -2 — result is negative
+    assertDeepEqual(ctx.mod(ctx.n('7'), ctx.n('-3')), ctx.n('-2')),
+
+  'both negative': () =>
+    // floor(-7/-3) = floor(2.333) = 2; -7 - (-3)*2 = -1
+    assertDeepEqual(ctx.mod(ctx.n('-7'), ctx.n('-3')), ctx.n('-1')),
+
+  'sign follows divisor (contrast with truncated %)': () =>
+    // floored: -1 mod 3 = 2 (positive); truncated remainder would give -1
+    assertDeepEqual(ctx.mod(ctx.n('-1'), ctx.n('3')), ctx.n('2')),
+
+  'fractional': () =>
+    // floor(0.7/0.3) = floor(2.333) = 2; 0.7 - 0.3*2 = 0.1
+    assertDeepEqual(ctx.mod(ctx.n('0.7'), ctx.n('0.3')), ctx.n('0.1')),
+
+}).runTests();
