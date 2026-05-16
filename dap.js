@@ -80,6 +80,12 @@ export class dapCtx {
     return neg ? '-' + result : result;
   }
 
+  // Returns 1 if a > b, -1 if a < b, 0 if equal
+  cmp(a, b) {
+    const d = this.sub(a, b);
+    return d.m > 0n ? 1 : d.m < 0n ? -1 : 0;
+  }
+
   add(a, b) {
     // Ensure a has the larger (or equal) exponent
     if (a.e < b.e) {
@@ -280,29 +286,6 @@ export class dapCtx {
     return this.sub(a, this.mul(b, this.floor(this.div(a, b))));
   }
 
-  // Returns 1 if a > b, -1 if a < b, 0 if equal
-  cmp(a, b) {
-    const d = this.sub(a, b);
-    return d.m > 0n ? 1 : d.m < 0n ? -1 : 0;
-  }
-
-  // atanh(t) = t + t^3/3 + t^5/5 + ..., |t| < 1
-  atanh(t) {
-    const t2 = this.mul(t, t);
-    let term = t;
-    let sum = t;
-    for (let i = 1; ; i++) {
-      term = this.mul(term, t2);
-      if (term.m === 0n) break;
-      const delta = this.div(term, this.n(String(2 * i + 1)));
-      if (delta.m === 0n) break;
-      const prev = sum;
-      sum = this.add(sum, delta);
-      if (sum.m === prev.m && sum.e === prev.e) break;
-    }
-    return sum;
-  }
-
   ln(a) {
     if (a.m <= 0n) throw new Error('ln: argument must be positive');
     // Write a = r * 2^k * 10^(a.e-1), r ∈ [1,2)
@@ -321,11 +304,11 @@ export class dapCtx {
 
     if (k !== 0 || expShift !== 0) {
       const ln2 = this.mul(two, this.atanh(this.div(one, three)));
-      if (k !== 0) result = this.add(result, this.mul(this.n(String(k)), ln2));
+      if (k !== 0) result = this.add(result, this.mul(this.n(k), ln2));
       if (expShift !== 0) {
         const five = this.n('5');
         const ln5 = this.mul(two, this.atanh(this.div(this.sub(five, one), this.add(five, one))));
-        result = this.add(result, this.mul(this.n(String(expShift)), this.add(ln2, ln5)));
+        result = this.add(result, this.mul(this.n(expShift), this.add(ln2, ln5)));
       }
     }
     return result;
@@ -340,7 +323,7 @@ export class dapCtx {
     let sum = this.add(one, a);
     let term = a;
     for (let i = 2; i <= 6 * this.prec; i++) {
-      term = this.div(this.mul(term, a), this.n(String(i)));
+      term = this.div(this.mul(term, a), this.n(i));
       if (term.m === 0n) break;
       const prev = sum;
       sum = this.add(sum, term);
@@ -376,5 +359,39 @@ export class dapCtx {
     // Non-integer exponent: a^b = exp(b * ln(a)); requires a > 0
     if (a.m < 0n) throw new Error('pow: non-integer exponent requires positive base');
     return this.exp(this.mul(b, this.ln(a)));
+  }
+
+  // Inverse hyperbolic tangent via its Maclaurin series, valid for |t| < 1:
+  //
+  //   atanh(t) = t + t³/3 + t⁵/5 + t⁷/7 + ...
+  //
+  // Derivation: atanh(t) = (1/2)·ln((1+t)/(1-t)).  Expanding the logarithm
+  // as a power series and combining terms yields the odd-power series above.
+  //
+  // Implementation:
+  //   - Keep a running `term` = t^(2i+1); multiply by t² each iteration.
+  //   - Divide `term` by the current odd denominator (2i+1) to get `delta`.
+  //   - Accumulate into `sum` until `delta` rounds to zero or `sum` stops
+  //     changing (both mean the remaining tail is below representation error).
+  //
+  // Convergence: for |t| < 1 the series converges geometrically — each term
+  // is bounded by |t|^(2i+1), so at t = 1/3 (the value used by ln() for ln 2)
+  // terms shrink by a factor of 1/9 each step, reaching 10^-prec in ~prec/2
+  // iterations.  The series is used internally by ln() via the identity:
+  //   ln(r) = 2·atanh((r−1)/(r+1)),  r ∈ [1, 2)  →  t ∈ [0, 1/3)
+  atanh(t) {
+    const t2 = this.mul(t, t);
+    let term = t;
+    let sum = t;
+    for (let i = 1; ; i++) {
+      term = this.mul(term, t2);
+      if (term.m === 0n) break;
+      const delta = this.div(term, this.n(2 * i + 1));
+      if (delta.m === 0n) break;
+      const prev = sum;
+      sum = this.add(sum, delta);
+      if (sum.m === prev.m && sum.e === prev.e) break;
+    }
+    return sum;
   }
 }
