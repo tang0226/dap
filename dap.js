@@ -1,397 +1,413 @@
-export class dapCtx {
-  constructor(prec) {
-    this.prec = prec;
-    this.base = 10n ** BigInt(this.prec);
-    this.baseSq = this.base * this.base;
-    this.halfBase = this.base / 2n;
-    this.pow10 = new Array(prec + 1);
-    this.halfPow10 = new Array(prec + 1);
-    this.pow10[0] = 1n;
-    this.halfPow10[0] = 0n;
-    for (let i = 1; i < prec; i++) {
-      this.pow10[i] = this.pow10[i - 1] * 10n;
-      this.halfPow10[i] = this.pow10[i] / 2n;  // = 5n * pow10[i-1], no allocation at lookup
-    }
-    this.pow10[prec] = this.base;
-    this.halfPow10[prec] = this.halfBase;
+export function dapCtx(prec) {
+  this.prec = prec;
+  this.base = 10n ** BigInt(this.prec);
+  this.baseSq = this.base * this.base;
+  this.halfBase = this.base / 2n;
+  this.pow10 = new Array(prec + 1);
+  this.halfPow10 = new Array(prec + 1);
+  this.pow10[0] = 1n;
+  this.halfPow10[0] = 0n;
+  for (let i = 1; i < prec; i++) {
+    this.pow10[i] = this.pow10[i - 1] * 10n;
+    this.halfPow10[i] = this.pow10[i] / 2n;  // = 5n * pow10[i-1], no allocation at lookup
   }
-
-  n(m, e) {
-    if (typeof m === 'number') m = String(m);
-    if (typeof m === 'string') {
-      const neg = m[0] === '-';
-      const s = neg ? m.slice(1) : m;
-      const dot = s.indexOf('.');
-      const intPart = (dot === -1 ? s : s.slice(0, dot)) || '0';
-      const fracPart = dot === -1 ? '' : s.slice(dot + 1);
-      // e: integer digit count for values >=1, or -(leading frac zeros) for <1
-      let eVal;
-      if (intPart !== '0') {
-        eVal = intPart.length;
-      } else {
-        let z = 0;
-        while (z < fracPart.length && fracPart[z] === '0') z++;
-        eVal = -z;
-      }
-      // strip leading zeros to get the raw significant digit string
-      const raw = intPart + fracPart;
-      let i = 0;
-      while (i < raw.length && raw[i] === '0') i++;
-      if (i === raw.length) return { m: 0n, e: 0 };
-      const mBig = neg ? -BigInt(raw.slice(i)) : BigInt(raw.slice(i));
-      return this.n(mBig, eVal);
-    }
-    // BigInt path
-    if (m === 0n) return { m: 0n, e };
-    const neg = m < 0n;
-    const abs = neg ? -m : m;
-    const digits = String(abs).length;
-    const diff = digits - this.prec;
-    if (diff === 0) return { m, e };
-    if (diff < 0) return { m: m * this.pow10[-diff], e };
-    // digits > prec: truncate with rounding
-    const divisor = 10n ** BigInt(diff);
-    const rem = abs % divisor;
-    let normalized = m / divisor;
-    if (rem >= divisor / 2n) normalized += neg ? -1n : 1n;
-    // overflow: e.g. 9.9999995 with prec=7 rounds to 10.000000
-    const absNorm = normalized < 0n ? -normalized : normalized;
-    if (absNorm >= this.base) { normalized /= 10n; e++; }
-    return { m: normalized, e };
-  }
-
-  toString(a) {
-    if (a.m === 0n) return '0';
-    const neg = a.m < 0n;
-    const abs = neg ? -a.m : a.m;
-    const s = String(abs);
-    const d = s.length;
-    const decPt = d - this.prec + a.e; // digits before the decimal point
-
-    let result;
-    if (decPt >= d) {
-      result = s + '0'.repeat(decPt - d);
-    } else if (decPt > 0) {
-      result = s.slice(0, decPt) + '.' + s.slice(decPt);
-    } else {
-      result = '0.' + '0'.repeat(-decPt) + s;
-    }
-
-    return neg ? '-' + result : result;
-  }
-
-  // Returns 1 if a > b, -1 if a < b, 0 if equal
-  cmp(a, b) {
-    const d = this.sub(a, b);
-    return d.m > 0n ? 1 : d.m < 0n ? -1 : 0;
-  }
-
-  add(a, b) {
-    // Ensure a has the larger (or equal) exponent
-    if (a.e < b.e) {
-      let tmp = a;
-      a = b;
-      b = tmp;
-    }
-
-    const shift = a.e - b.e;
-
-    // b is more than one position below a's precision floor — contributes nothing,
-    // not even a rounding carry. shift === prec is still handled below since b's
-    // leading digit sits exactly at the rounding position.
-    if (shift > this.prec) return a;
-
-    // Right-shift b.m by `shift` digits to align with a
-    let bAligned = b.m / this.pow10[shift];
-    if (shift > 0) {
-      const rem = b.m % this.pow10[shift];
-      const absRem = rem < 0n ? -rem : rem;
-      // Round half-away-from-zero on the dropped digits
-      if (absRem >= this.halfPow10[shift]) {
-        bAligned += b.m >= 0n ? 1n : -1n;
-      }
-    }
-
-    let m = a.m + bAligned;
-    let e = a.e;
-
-    // Overflow: addition produced prec+1 digits — round the last one off
-    if (m >= this.base || m <= -this.base) {
-      const r = m % 10n;
-      const absR = r < 0n ? -r : r;
-      m = m / 10n + (absR >= 5n ? (m > 0n ? 1n : -1n) : 0n);
-      e++;
-    }
-
-    return { m, e };
-  }
-
-  sub(a, b) {
-    return this.add(a, { m: -b.m, e: b.e });
-  }
-
-  mul(a, b) {
-    // a.m * 10^(a.e - prec) * b.m * 10^(b.e - prec)
-    // = (a.m * b.m) * 10^(a.e + b.e - 2prec)
-    // = (a.m * b.m) / 10^prec * 10^(a.e + b.e - prec)  (2prec digs in mProd)
-    // = (a.m * b.m) / 10^(prec-1) * 10^(a.e + b.e - prec - 1) (2prec-1 digs in mProd)
-
-    const mProd = a.m * b.m; // 2prec or 2prec-1 digs
-    const rem = mProd % this.base; // lower prec digs, same sign as mProd
-    const absRem = rem < 0n ? -rem : rem;
-    let m = mProd / this.base; // prec or prec-1 digs
-    const absM = m < 0n ? -m : m;
-    let e = a.e + b.e; // er = ea + eb - prec + d; base assumes d=prec, else branch subtracts 1
-
-    if (absM >= this.pow10[this.prec - 1]) {
-      // mProd had 2prec digits — m already has prec digits, just round
-      if (absRem >= this.halfBase) {
-        m += m > 0n ? 1n : -1n;
-      }
-    } else {
-      // mProd had 2prec-1 digits — pull one digit from rem into m
-      e--;
-      const remTwoDigs = absRem / this.pow10[this.prec - 2];
-      m = m * 10n + (m >= 0n ? 1n : -1n) * (remTwoDigs / 10n);
-      if (remTwoDigs % 10n >= 5n) {
-        m += m > 0n ? 1n : -1n;
-      }
-    }
-
-    // Rounding in the prec-1 branch can push m to base — normalize one more digit
-    if (m >= this.base || m <= -this.base) {
-      const r = m % 10n;
-      const absR = r < 0n ? -r : r;
-      m = m / 10n + (absR >= 5n ? (m > 0n ? 1n : -1n) : 0n);
-      e++;
-    }
-
-    return { m, e };
-  }
-
-  div(a, b) {
-    // a.m * 10^(a.e-prec) / (b.m * 10^(b.e-prec)) = (a.m/b.m) * 10^(a.e-b.e)
-    // Multiply a.m by base before dividing so q has prec (or prec+1) digits.
-    // q >= base  →  prec+1 digits, drop last with rounding,  e = a.e - b.e + 1
-    // q <  base  →  prec   digits, round on fractional rem,  e = a.e - b.e
-    const sign = (a.m < 0n) !== (b.m < 0n);
-    const absA = a.m < 0n ? -a.m : a.m;
-    const absB = b.m < 0n ? -b.m : b.m;
-
-    const dividend = absA * this.base;
-    const q = dividend / absB;
-    const rem = dividend % absB;
-
-    let m, e;
-    if (q >= this.base) {
-      const r = q % 10n;
-      m = q / 10n + (r >= 5n ? 1n : 0n);
-      e = a.e - b.e + 1;
-    } else {
-      m = q + (rem * 2n >= absB ? 1n : 0n);
-      e = a.e - b.e;
-    }
-
-    if (m >= this.base) { m /= 10n; e++; }
-
-    return { m: sign ? -m : m, e };
-  }
-
-  sqrt(a) {
-    if (a.m === 0n) return { m: 0n, e: 0 };
-
-    // value = a.m * 10^(a.e - prec)
-    // sqrt(value) = sqrt(N) * 10^((a.e - prec - S) / 2), N = a.m * 10^S
-    // S chosen so (a.e - prec - S) is even:
-    //   a.e even → S = prec,   e_r = a.e >> 1
-    //   a.e odd  → S = prec-1, e_r = (a.e + 1) >> 1
-    // Both give N with 2*prec or 2*prec-1 digits, so isqrt(N) has prec digits.
-    const odd = (a.e & 1) !== 0;
-    const N = odd ? a.m * this.pow10[this.prec - 1] : a.m * this.base;
-    let e = odd ? (a.e + 1) >> 1 : a.e >> 1;
-
-    // Newton-Raphson integer sqrt — O(log prec) iterations
-    // a.m has exactly prec digits; extract top k as a float via cached pow10 divisor
-    const k = Math.min(15, this.prec);
-    const amTop = Number(a.m / this.pow10[this.prec - k]);
-    const tail = odd ? 2 * this.prec - 1 - k : 2 * this.prec - k; // total digits in N minus k
-    const floatN = tail % 2 === 0 ? amTop : amTop * 10;
-    let x = BigInt(Math.ceil(Math.sqrt(floatN))) * this.pow10[tail >> 1];
-    while (true) {
-      const x1 = (x + N / x) >> 1n;
-      if (x1 >= x) break;
-      x = x1;
-    }
-
-    // Ties never occur: sqrt of a non-perfect-square is irrational
-    const r = N - x * x;
-    let m = r > x ? x + 1n : x;
-    if (m >= this.base) { m /= 10n; e++; }
-
-    return { m, e };
-  }
-
-  neg(a) {
-    return { m: -a.m, e: a.e };
-  }
-
-  trunc(a) {
-    if (a.e < 0) return { m: 0n, e: 0 };
-    if (a.e >= this.prec) return a;
-    const frac = this.prec - a.e;
-    const q = a.m / this.pow10[frac];
-    if (q === 0n) return { m: 0n, e: 0 };
-    return this.n(q, a.e);
-  }
-
-  round(a) {
-    if (a.e < 0) return { m: 0n, e: 0 };
-    if (a.e >= this.prec) return a;
-    const frac = this.prec - a.e;
-    const rem = a.m % this.pow10[frac];
-    const absRem = rem < 0n ? -rem : rem;
-    let q = a.m / this.pow10[frac];
-    if (absRem >= this.halfPow10[frac]) q += a.m >= 0n ? 1n : -1n;
-    if (q === 0n) return { m: 0n, e: 0 };
-    const absQ = q < 0n ? -q : q;
-    return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
-  }
-
-  floor(a) {
-    if (a.e < 0) return a.m < 0n ? this.n(-1n, 1) : { m: 0n, e: 0 };
-    if (a.e >= this.prec) return a;
-    const frac = this.prec - a.e;
-    const rem = a.m % this.pow10[frac];
-    let q = a.m / this.pow10[frac];
-    if (rem < 0n) q -= 1n;
-    if (q === 0n) return { m: 0n, e: 0 };
-    const absQ = q < 0n ? -q : q;
-    return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
-  }
-
-  ceil(a) {
-    if (a.e < 0) return a.m > 0n ? this.n(1n, 1) : { m: 0n, e: 0 };
-    if (a.e >= this.prec) return a;
-    const frac = this.prec - a.e;
-    const rem = a.m % this.pow10[frac];
-    let q = a.m / this.pow10[frac];
-    if (rem > 0n) q += 1n;
-    if (q === 0n) return { m: 0n, e: 0 };
-    const absQ = q < 0n ? -q : q;
-    return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
-  }
-
-  // Floored modulo: result has the same sign as b (a - b*floor(a/b))
-  mod(a, b) {
-    return this.sub(a, this.mul(b, this.floor(this.div(a, b))));
-  }
-
-  ln(a) {
-    if (a.m <= 0n) throw new Error('ln: argument must be positive');
-    // Write a = r * 2^k * 10^(a.e-1), r ∈ [1,2)
-    // ln(a) = 2*atanh((r-1)/(r+1)) + k*ln(2) + (a.e-1)*ln(10)
-    const expShift = a.e - 1;
-    let r = { m: a.m, e: 1 }; // value in [1, 10)
-
-    const one = this.n('1');
-    const two = this.n('2');
-    const three = this.n('3');
-    let k = 0;
-    while (this.cmp(r, two) >= 0) { r = this.div(r, two); k++; }
-
-    const t = this.div(this.sub(r, one), this.add(r, one));
-    let result = this.mul(two, this.atanh(t));
-
-    if (k !== 0 || expShift !== 0) {
-      const ln2 = this.mul(two, this.atanh(this.div(one, three)));
-      if (k !== 0) result = this.add(result, this.mul(this.n(k), ln2));
-      if (expShift !== 0) {
-        const five = this.n('5');
-        const ln5 = this.mul(two, this.atanh(this.div(this.sub(five, one), this.add(five, one))));
-        result = this.add(result, this.mul(this.n(expShift), this.add(ln2, ln5)));
-      }
-    }
-    return result;
-  }
-
-  exp(a) {
-    if (a.m === 0n) return this.n('1');
-    // Negative: use exp(-x) = 1/exp(x) to avoid cancellation in the alternating series
-    if (a.m < 0n) return this.div(this.n('1'), this.exp(this.neg(a)));
-    // Direct Taylor series: 1 + x + x^2/2! + ..., all terms positive for x > 0
-    const one = this.n('1');
-    let sum = this.add(one, a);
-    let term = a;
-    for (let i = 2; i <= 6 * this.prec; i++) {
-      term = this.div(this.mul(term, a), this.n(i));
-      if (term.m === 0n) break;
-      const prev = sum;
-      sum = this.add(sum, term);
-      if (sum.m === prev.m && sum.e === prev.e) break;
-    }
-    return sum;
-  }
-
-  pow(a, b) {
-    if (b.m === 0n) return this.n('1');
-    if (a.m === 0n) return { m: 0n, e: 0 };
-
-    // Integer exponent: binary exponentiation
-    const bIsInt = b.e >= 1 && (b.e >= this.prec || b.m % this.pow10[this.prec - b.e] === 0n);
-    if (bIsInt) {
-      const bInt = b.e >= this.prec
-        ? b.m * 10n ** BigInt(b.e - this.prec)
-        : b.m / this.pow10[this.prec - b.e];
-      const neg = bInt < 0n;
-      const abs = neg ? -bInt : bInt;
-      const one = this.n('1');
-      let result = one;
-      let base = a;
-      let exp = abs;
-      while (exp > 0n) {
-        if (exp & 1n) result = this.mul(result, base);
-        base = this.mul(base, base);
-        exp >>= 1n;
-      }
-      return neg ? this.div(one, result) : result;
-    }
-
-    // Non-integer exponent: a^b = exp(b * ln(a)); requires a > 0
-    if (a.m < 0n) throw new Error('pow: non-integer exponent requires positive base');
-    return this.exp(this.mul(b, this.ln(a)));
-  }
-
-  // Inverse hyperbolic tangent via its Maclaurin series, valid for |t| < 1:
-  //
-  //   atanh(t) = t + t³/3 + t⁵/5 + t⁷/7 + ...
-  //
-  // Derivation: atanh(t) = (1/2)·ln((1+t)/(1-t)).  Expanding the logarithm
-  // as a power series and combining terms yields the odd-power series above.
-  //
-  // Implementation:
-  //   - Keep a running `term` = t^(2i+1); multiply by t² each iteration.
-  //   - Divide `term` by the current odd denominator (2i+1) to get `delta`.
-  //   - Accumulate into `sum` until `delta` rounds to zero or `sum` stops
-  //     changing (both mean the remaining tail is below representation error).
-  //
-  // Convergence: for |t| < 1 the series converges geometrically — each term
-  // is bounded by |t|^(2i+1), so at t = 1/3 (the value used by ln() for ln 2)
-  // terms shrink by a factor of 1/9 each step, reaching 10^-prec in ~prec/2
-  // iterations.  The series is used internally by ln() via the identity:
-  //   ln(r) = 2·atanh((r−1)/(r+1)),  r ∈ [1, 2)  →  t ∈ [0, 1/3)
-  atanh(t) {
-    const t2 = this.mul(t, t);
-    let term = t;
-    let sum = t;
-    for (let i = 1; ; i++) {
-      term = this.mul(term, t2);
-      if (term.m === 0n) break;
-      const delta = this.div(term, this.n(2 * i + 1));
-      if (delta.m === 0n) break;
-      const prev = sum;
-      sum = this.add(sum, delta);
-      if (sum.m === prev.m && sum.e === prev.e) break;
-    }
-    return sum;
-  }
+  this.pow10[prec] = this.base;
+  this.halfPow10[prec] = this.halfBase;
 }
+
+dapCtx.prototype.n = function(m, e) {
+  if (typeof m === 'number') m = String(m);
+  if (typeof m === 'string') {
+    const neg = m[0] === '-';
+    const s = neg ? m.slice(1) : m;
+    const dot = s.indexOf('.');
+    const intPart = (dot === -1 ? s : s.slice(0, dot)) || '0';
+    const fracPart = dot === -1 ? '' : s.slice(dot + 1);
+    // e: integer digit count for values >=1, or -(leading frac zeros) for <1
+    let eVal;
+    if (intPart !== '0') {
+      eVal = intPart.length;
+    } else {
+      let z = 0;
+      while (z < fracPart.length && fracPart[z] === '0') z++;
+      eVal = -z;
+    }
+    // strip leading zeros to get the raw significant digit string
+    const raw = intPart + fracPart;
+    let i = 0;
+    while (i < raw.length && raw[i] === '0') i++;
+    if (i === raw.length) return { m: 0n, e: 0 };
+    const mBig = neg ? -BigInt(raw.slice(i)) : BigInt(raw.slice(i));
+    return this.n(mBig, eVal);
+  }
+  // BigInt path
+  if (m === 0n) return { m: 0n, e };
+  const neg = m < 0n;
+  const abs = neg ? -m : m;
+  const digits = String(abs).length;
+  const diff = digits - this.prec;
+  if (diff === 0) return { m, e };
+  if (diff < 0) return { m: m * this.pow10[-diff], e };
+  // digits > prec: truncate with rounding
+  const divisor = 10n ** BigInt(diff);
+  const rem = abs % divisor;
+  let normalized = m / divisor;
+  if (rem >= divisor / 2n) normalized += neg ? -1n : 1n;
+  // overflow: e.g. 9.9999995 with prec=7 rounds to 10.000000
+  const absNorm = normalized < 0n ? -normalized : normalized;
+  if (absNorm >= this.base) { normalized /= 10n; e++; }
+  return { m: normalized, e };
+};
+
+dapCtx.prototype.toString = function(a) {
+  if (a.m === 0n) return '0';
+  const neg = a.m < 0n;
+  const abs = neg ? -a.m : a.m;
+  const s = String(abs);
+  const d = s.length;
+  const decPt = d - this.prec + a.e; // digits before the decimal point
+
+  let result;
+  if (decPt >= d) {
+    result = s + '0'.repeat(decPt - d);
+  } else if (decPt > 0) {
+    result = s.slice(0, decPt) + '.' + s.slice(decPt);
+  } else {
+    result = '0.' + '0'.repeat(-decPt) + s;
+  }
+
+  return neg ? '-' + result : result;
+};
+
+// Returns 1 if a > b, -1 if a < b, 0 if equal.
+// Compares sign → exponent → mantissa with no subtraction.
+// Assumes normalized mantissas (prec significant digits); results are
+// unspecified for non-canonical values produced by heavy cancellation.
+dapCtx.prototype.cmp = function(a, b) {
+  const sa = a.m > 0n ? 1 : a.m < 0n ? -1 : 0;
+  const sb = b.m > 0n ? 1 : b.m < 0n ? -1 : 0;
+  if (sa !== sb) return sa > sb ? 1 : -1;
+  if (sa === 0) return 0; // both zero
+  // Same non-zero sign: larger e means larger magnitude.
+  if (a.e !== b.e) {
+    const byE = a.e > b.e ? 1 : -1;
+    return sa > 0 ? byE : -byE;
+  }
+  return a.m > b.m ? 1 : a.m < b.m ? -1 : 0;
+};
+
+dapCtx.prototype.eq = function(a, b) { return this.cmp(a, b) === 0; };
+dapCtx.prototype.equals = dapCtx.prototype.eq;
+dapCtx.prototype.gt = function(a, b) { return this.cmp(a, b) > 0; };
+dapCtx.prototype.lt = function(a, b) { return this.cmp(a, b) < 0; };
+dapCtx.prototype.gte = function(a, b) { return this.cmp(a, b) >= 0; };
+dapCtx.prototype.lte = function(a, b) { return this.cmp(a, b) <= 0; };
+
+dapCtx.prototype.add = function(a, b) {
+  // Ensure a has the larger (or equal) exponent
+  if (a.e < b.e) {
+    let tmp = a;
+    a = b;
+    b = tmp;
+  }
+
+  const shift = a.e - b.e;
+
+  // b is more than one position below a's precision floor — contributes nothing,
+  // not even a rounding carry. shift === prec is still handled below since b's
+  // leading digit sits exactly at the rounding position.
+  if (shift > this.prec) return a;
+
+  // Right-shift b.m by `shift` digits to align with a
+  let bAligned = b.m / this.pow10[shift];
+  if (shift > 0) {
+    const rem = b.m % this.pow10[shift];
+    const absRem = rem < 0n ? -rem : rem;
+    // Round half-away-from-zero on the dropped digits
+    if (absRem >= this.halfPow10[shift]) {
+      bAligned += b.m >= 0n ? 1n : -1n;
+    }
+  }
+
+  let m = a.m + bAligned;
+  let e = a.e;
+
+  // Overflow: addition produced prec+1 digits — round the last one off
+  if (m >= this.base || m <= -this.base) {
+    const r = m % 10n;
+    const absR = r < 0n ? -r : r;
+    m = m / 10n + (absR >= 5n ? (m > 0n ? 1n : -1n) : 0n);
+    e++;
+  }
+
+  return { m, e };
+};
+
+dapCtx.prototype.sub = function(a, b) {
+  return this.add(a, { m: -b.m, e: b.e });
+};
+
+dapCtx.prototype.mul = function(a, b) {
+  // a.m * 10^(a.e - prec) * b.m * 10^(b.e - prec)
+  // = (a.m * b.m) * 10^(a.e + b.e - 2prec)
+  // = (a.m * b.m) / 10^prec * 10^(a.e + b.e - prec)  (2prec digs in mProd)
+  // = (a.m * b.m) / 10^(prec-1) * 10^(a.e + b.e - prec - 1) (2prec-1 digs in mProd)
+
+  const mProd = a.m * b.m; // 2prec or 2prec-1 digs
+  const rem = mProd % this.base; // lower prec digs, same sign as mProd
+  const absRem = rem < 0n ? -rem : rem;
+  let m = mProd / this.base; // prec or prec-1 digs
+  const absM = m < 0n ? -m : m;
+  let e = a.e + b.e; // er = ea + eb - prec + d; base assumes d=prec, else branch subtracts 1
+
+  if (absM >= this.pow10[this.prec - 1]) {
+    // mProd had 2prec digits — m already has prec digits, just round
+    if (absRem >= this.halfBase) {
+      m += m > 0n ? 1n : -1n;
+    }
+  } else {
+    // mProd had 2prec-1 digits — pull one digit from rem into m
+    e--;
+    const remTwoDigs = absRem / this.pow10[this.prec - 2];
+    m = m * 10n + (m >= 0n ? 1n : -1n) * (remTwoDigs / 10n);
+    if (remTwoDigs % 10n >= 5n) {
+      m += m > 0n ? 1n : -1n;
+    }
+  }
+
+  // Rounding in the prec-1 branch can push m to base — normalize one more digit
+  if (m >= this.base || m <= -this.base) {
+    const r = m % 10n;
+    const absR = r < 0n ? -r : r;
+    m = m / 10n + (absR >= 5n ? (m > 0n ? 1n : -1n) : 0n);
+    e++;
+  }
+
+  return { m, e };
+};
+
+dapCtx.prototype.div = function(a, b) {
+  // a.m * 10^(a.e-prec) / (b.m * 10^(b.e-prec)) = (a.m/b.m) * 10^(a.e-b.e)
+  // Multiply a.m by base before dividing so q has prec (or prec+1) digits.
+  // q >= base  →  prec+1 digits, drop last with rounding,  e = a.e - b.e + 1
+  // q <  base  →  prec   digits, round on fractional rem,  e = a.e - b.e
+  const sign = (a.m < 0n) !== (b.m < 0n);
+  const absA = a.m < 0n ? -a.m : a.m;
+  const absB = b.m < 0n ? -b.m : b.m;
+
+  const dividend = absA * this.base;
+  const q = dividend / absB;
+  const rem = dividend % absB;
+
+  let m, e;
+  if (q >= this.base) {
+    const r = q % 10n;
+    m = q / 10n + (r >= 5n ? 1n : 0n);
+    e = a.e - b.e + 1;
+  } else {
+    m = q + (rem * 2n >= absB ? 1n : 0n);
+    e = a.e - b.e;
+  }
+
+  if (m >= this.base) { m /= 10n; e++; }
+
+  return { m: sign ? -m : m, e };
+};
+
+dapCtx.prototype.sqrt = function(a) {
+  if (a.m === 0n) return { m: 0n, e: 0 };
+
+  // value = a.m * 10^(a.e - prec)
+  // sqrt(value) = sqrt(N) * 10^((a.e - prec - S) / 2), N = a.m * 10^S
+  // S chosen so (a.e - prec - S) is even:
+  //   a.e even → S = prec,   e_r = a.e >> 1
+  //   a.e odd  → S = prec-1, e_r = (a.e + 1) >> 1
+  // Both give N with 2*prec or 2*prec-1 digits, so isqrt(N) has prec digits.
+  const odd = (a.e & 1) !== 0;
+  const N = odd ? a.m * this.pow10[this.prec - 1] : a.m * this.base;
+  let e = odd ? (a.e + 1) >> 1 : a.e >> 1;
+
+  // Newton-Raphson integer sqrt — O(log prec) iterations
+  // a.m has exactly prec digits; extract top k as a float via cached pow10 divisor
+  const k = Math.min(15, this.prec);
+  const amTop = Number(a.m / this.pow10[this.prec - k]);
+  const tail = odd ? 2 * this.prec - 1 - k : 2 * this.prec - k; // total digits in N minus k
+  const floatN = tail % 2 === 0 ? amTop : amTop * 10;
+  let x = BigInt(Math.ceil(Math.sqrt(floatN))) * this.pow10[tail >> 1];
+  while (true) {
+    const x1 = (x + N / x) >> 1n;
+    if (x1 >= x) break;
+    x = x1;
+  }
+
+  // Ties never occur: sqrt of a non-perfect-square is irrational
+  const r = N - x * x;
+  let m = r > x ? x + 1n : x;
+  if (m >= this.base) { m /= 10n; e++; }
+
+  return { m, e };
+};
+
+dapCtx.prototype.neg = function(a) {
+  return { m: -a.m, e: a.e };
+};
+
+dapCtx.prototype.trunc = function(a) {
+  if (a.e < 0) return { m: 0n, e: 0 };
+  if (a.e >= this.prec) return a;
+  const frac = this.prec - a.e;
+  const q = a.m / this.pow10[frac];
+  if (q === 0n) return { m: 0n, e: 0 };
+  return this.n(q, a.e);
+};
+
+dapCtx.prototype.round = function(a) {
+  if (a.e < 0) return { m: 0n, e: 0 };
+  if (a.e >= this.prec) return a;
+  const frac = this.prec - a.e;
+  const rem = a.m % this.pow10[frac];
+  const absRem = rem < 0n ? -rem : rem;
+  let q = a.m / this.pow10[frac];
+  if (absRem >= this.halfPow10[frac]) q += a.m >= 0n ? 1n : -1n;
+  if (q === 0n) return { m: 0n, e: 0 };
+  const absQ = q < 0n ? -q : q;
+  return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
+};
+
+dapCtx.prototype.floor = function(a) {
+  if (a.e < 0) return a.m < 0n ? this.n(-1n, 1) : { m: 0n, e: 0 };
+  if (a.e >= this.prec) return a;
+  const frac = this.prec - a.e;
+  const rem = a.m % this.pow10[frac];
+  let q = a.m / this.pow10[frac];
+  if (rem < 0n) q -= 1n;
+  if (q === 0n) return { m: 0n, e: 0 };
+  const absQ = q < 0n ? -q : q;
+  return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
+};
+
+dapCtx.prototype.ceil = function(a) {
+  if (a.e < 0) return a.m > 0n ? this.n(1n, 1) : { m: 0n, e: 0 };
+  if (a.e >= this.prec) return a;
+  const frac = this.prec - a.e;
+  const rem = a.m % this.pow10[frac];
+  let q = a.m / this.pow10[frac];
+  if (rem > 0n) q += 1n;
+  if (q === 0n) return { m: 0n, e: 0 };
+  const absQ = q < 0n ? -q : q;
+  return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
+};
+
+// Floored modulo: result has the same sign as b (a - b*floor(a/b))
+dapCtx.prototype.mod = function(a, b) {
+  return this.sub(a, this.mul(b, this.floor(this.div(a, b))));
+};
+
+dapCtx.prototype.ln = function(a) {
+  if (a.m <= 0n) throw new Error('ln: argument must be positive');
+  // Write a = r * 2^k * 10^(a.e-1), r ∈ [1,2)
+  // ln(a) = 2*atanh((r-1)/(r+1)) + k*ln(2) + (a.e-1)*ln(10)
+  const expShift = a.e - 1;
+  let r = { m: a.m, e: 1 }; // value in [1, 10)
+
+  const one = this.n('1');
+  const two = this.n('2');
+  const three = this.n('3');
+  let k = 0;
+  while (this.cmp(r, two) >= 0) { r = this.div(r, two); k++; }
+
+  const t = this.div(this.sub(r, one), this.add(r, one));
+  let result = this.mul(two, this.atanh(t));
+
+  if (k !== 0 || expShift !== 0) {
+    const ln2 = this.mul(two, this.atanh(this.div(one, three)));
+    if (k !== 0) result = this.add(result, this.mul(this.n(k), ln2));
+    if (expShift !== 0) {
+      const five = this.n('5');
+      const ln5 = this.mul(two, this.atanh(this.div(this.sub(five, one), this.add(five, one))));
+      result = this.add(result, this.mul(this.n(expShift), this.add(ln2, ln5)));
+    }
+  }
+  return result;
+};
+
+dapCtx.prototype.exp = function(a) {
+  if (a.m === 0n) return this.n('1');
+  // Negative: use exp(-x) = 1/exp(x) to avoid cancellation in the alternating series
+  if (a.m < 0n) return this.div(this.n('1'), this.exp(this.neg(a)));
+  // Direct Taylor series: 1 + x + x^2/2! + ..., all terms positive for x > 0
+  const one = this.n('1');
+  let sum = this.add(one, a);
+  let term = a;
+  for (let i = 2; i <= 6 * this.prec; i++) {
+    term = this.div(this.mul(term, a), this.n(i));
+    if (term.m === 0n) break;
+    const prev = sum;
+    sum = this.add(sum, term);
+    if (sum.m === prev.m && sum.e === prev.e) break;
+  }
+  return sum;
+};
+
+dapCtx.prototype.pow = function(a, b) {
+  if (b.m === 0n) return this.n('1');
+  if (a.m === 0n) return { m: 0n, e: 0 };
+
+  // Integer exponent: binary exponentiation
+  const bIsInt = b.e >= 1 && (b.e >= this.prec || b.m % this.pow10[this.prec - b.e] === 0n);
+  if (bIsInt) {
+    const bInt = b.e >= this.prec
+      ? b.m * 10n ** BigInt(b.e - this.prec)
+      : b.m / this.pow10[this.prec - b.e];
+    const neg = bInt < 0n;
+    const abs = neg ? -bInt : bInt;
+    const one = this.n('1');
+    let result = one;
+    let base = a;
+    let exp = abs;
+    while (exp > 0n) {
+      if (exp & 1n) result = this.mul(result, base);
+      base = this.mul(base, base);
+      exp >>= 1n;
+    }
+    return neg ? this.div(one, result) : result;
+  }
+
+  // Non-integer exponent: a^b = exp(b * ln(a)); requires a > 0
+  if (a.m < 0n) throw new Error('pow: non-integer exponent requires positive base');
+  return this.exp(this.mul(b, this.ln(a)));
+};
+
+// Inverse hyperbolic tangent via its Maclaurin series, valid for |t| < 1:
+//
+//   atanh(t) = t + t³/3 + t⁵/5 + t⁷/7 + ...
+//
+// Derivation: atanh(t) = (1/2)·ln((1+t)/(1-t)).  Expanding the logarithm
+// as a power series and combining terms yields the odd-power series above.
+//
+// Implementation:
+//   - Keep a running `term` = t^(2i+1); multiply by t² each iteration.
+//   - Divide `term` by the current odd denominator (2i+1) to get `delta`.
+//   - Accumulate into `sum` until `delta` rounds to zero or `sum` stops
+//     changing (both mean the remaining tail is below representation error).
+//
+// Convergence: for |t| < 1 the series converges geometrically — each term
+// is bounded by |t|^(2i+1), so at t = 1/3 (the value used by ln() for ln 2)
+// terms shrink by a factor of 1/9 each step, reaching 10^-prec in ~prec/2
+// iterations.  The series is used internally by ln() via the identity:
+//   ln(r) = 2·atanh((r−1)/(r+1)),  r ∈ [1, 2)  →  t ∈ [0, 1/3)
+dapCtx.prototype.atanh = function(t) {
+  const t2 = this.mul(t, t);
+  let term = t;
+  let sum = t;
+  for (let i = 1; ; i++) {
+    term = this.mul(term, t2);
+    if (term.m === 0n) break;
+    const delta = this.div(term, this.n(2 * i + 1));
+    if (delta.m === 0n) break;
+    const prev = sum;
+    sum = this.add(sum, delta);
+    if (sum.m === prev.m && sum.e === prev.e) break;
+  }
+  return sum;
+};

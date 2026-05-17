@@ -205,6 +205,105 @@ new TestSuite('dapCtx.cmp()', {
 
 }).runTests();
 
+new TestSuite('dapCtx.eq() / equals()', {
+  'equal values': () => {
+    assertEqual(ctx.eq(ctx.n('3'), ctx.n('3')), true);
+  },
+
+  'unequal values': () => {
+    assertEqual(ctx.eq(ctx.n('3'), ctx.n('4')), false);
+  },
+
+  'negative equal': () => {
+    assertEqual(ctx.eq(ctx.n('-2'), ctx.n('-2')), true);
+  },
+
+  'positive vs negative': () => {
+    assertEqual(ctx.eq(ctx.n('1'), ctx.n('-1')), false);
+  },
+
+  'zero equals zero': () => {
+    assertEqual(ctx.eq(ctx.n('0'), ctx.n('0')), true);
+  },
+
+  'equals is same as eq': () => {
+    assertEqual(ctx.equals, ctx.eq);
+  },
+
+}).runTests();
+
+new TestSuite('dapCtx.gt()', {
+  'greater': () => {
+    assertEqual(ctx.gt(ctx.n('5'), ctx.n('3')), true);
+  },
+
+  'less': () => {
+    assertEqual(ctx.gt(ctx.n('3'), ctx.n('5')), false);
+  },
+
+  'equal': () => {
+    assertEqual(ctx.gt(ctx.n('3'), ctx.n('3')), false);
+  },
+
+  'negative vs positive': () => {
+    assertEqual(ctx.gt(ctx.n('-1'), ctx.n('1')), false);
+  },
+
+  'both negative, left is greater': () => {
+    assertEqual(ctx.gt(ctx.n('-1'), ctx.n('-3')), true);
+  },
+
+}).runTests();
+
+new TestSuite('dapCtx.lt()', {
+  'less': () => {
+    assertEqual(ctx.lt(ctx.n('3'), ctx.n('5')), true);
+  },
+
+  'greater': () => {
+    assertEqual(ctx.lt(ctx.n('5'), ctx.n('3')), false);
+  },
+
+  'equal': () => {
+    assertEqual(ctx.lt(ctx.n('3'), ctx.n('3')), false);
+  },
+
+  'negative vs positive': () => {
+    assertEqual(ctx.lt(ctx.n('-1'), ctx.n('1')), true);
+  },
+
+}).runTests();
+
+new TestSuite('dapCtx.gte()', {
+  'greater': () => {
+    assertEqual(ctx.gte(ctx.n('5'), ctx.n('3')), true);
+  },
+
+  'equal (boundary)': () => {
+    assertEqual(ctx.gte(ctx.n('3'), ctx.n('3')), true);
+  },
+
+  'less': () => {
+    assertEqual(ctx.gte(ctx.n('2'), ctx.n('3')), false);
+  },
+
+}).runTests();
+
+new TestSuite('dapCtx.lte()', {
+  'less': () => {
+    assertEqual(ctx.lte(ctx.n('2'), ctx.n('3')), true);
+  },
+
+  'equal (boundary)': () => {
+    assertEqual(ctx.lte(ctx.n('3'), ctx.n('3')), true);
+  },
+
+  'greater': () => {
+    assertEqual(ctx.lte(ctx.n('5'), ctx.n('3')), false);
+  },
+
+}).runTests();
+
 new TestSuite('dapCtx.add()', {
   'same exponent': () => {
     // 1.5 + 2.5 = 4.0
