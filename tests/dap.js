@@ -1,8 +1,8 @@
 import { TestSuite } from '../assert-js/test-suite.js'
 import { assertDeepEqual, assertEqual, assertThrows } from '../assert-js/assert.js'
-import { dapCtx } from '../dap.js'
+import { DapContext } from '../dap-context.js'
 
-const ctx = new dapCtx(7);
+const ctx = new DapContext(7);
 const n = (m, e) => ({ m, e });
 
 // Check all but the last digit — 1–2 ULP error is expected for transcendental results.
@@ -12,7 +12,7 @@ function assertApprox(actual, expected) {
     `Expected "${actual}" to approximate "${expected}" (prefix "${prefix}")`);
 }
 
-new TestSuite('dapCtx.n()', {
+new TestSuite('DapContext.n()', {
   'zero': () => {
     assertDeepEqual(ctx.n(0n, 5), n(0n, 5));
   },
@@ -130,7 +130,7 @@ new TestSuite('dapCtx.n()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.toString()', {
+new TestSuite('DapContext.toString()', {
   'zero': () => {
     assertDeepEqual(ctx.toString(ctx.n(0n, 0)), '0');
   },
@@ -178,7 +178,7 @@ new TestSuite('dapCtx.toString()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.cmp()', {
+new TestSuite('DapContext.cmp()', {
   'equal': () => {
     assertEqual(ctx.cmp(ctx.n('3'), ctx.n('3')), 0);
   },
@@ -205,7 +205,7 @@ new TestSuite('dapCtx.cmp()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.eq() / equals()', {
+new TestSuite('DapContext.eq() / equals()', {
   'equal values': () => {
     assertEqual(ctx.eq(ctx.n('3'), ctx.n('3')), true);
   },
@@ -232,7 +232,7 @@ new TestSuite('dapCtx.eq() / equals()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.gt()', {
+new TestSuite('DapContext.gt()', {
   'greater': () => {
     assertEqual(ctx.gt(ctx.n('5'), ctx.n('3')), true);
   },
@@ -255,7 +255,7 @@ new TestSuite('dapCtx.gt()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.lt()', {
+new TestSuite('DapContext.lt()', {
   'less': () => {
     assertEqual(ctx.lt(ctx.n('3'), ctx.n('5')), true);
   },
@@ -274,7 +274,7 @@ new TestSuite('dapCtx.lt()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.gte()', {
+new TestSuite('DapContext.gte()', {
   'greater': () => {
     assertEqual(ctx.gte(ctx.n('5'), ctx.n('3')), true);
   },
@@ -289,7 +289,7 @@ new TestSuite('dapCtx.gte()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.lte()', {
+new TestSuite('DapContext.lte()', {
   'less': () => {
     assertEqual(ctx.lte(ctx.n('2'), ctx.n('3')), true);
   },
@@ -304,7 +304,7 @@ new TestSuite('dapCtx.lte()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.add()', {
+new TestSuite('DapContext.add()', {
   'same exponent': () => {
     // 1.5 + 2.5 = 4.0
     assertDeepEqual(ctx.add(ctx.n(15n, 1), ctx.n(25n, 1)), ctx.n(4n, 1));
@@ -377,7 +377,7 @@ new TestSuite('dapCtx.add()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.sub()', {
+new TestSuite('DapContext.sub()', {
   'basic': () => {
     // 5.0 - 2.0 = 3.0
     assertDeepEqual(ctx.sub(ctx.n(5n, 1), ctx.n(2n, 1)), ctx.n(3n, 1));
@@ -399,9 +399,9 @@ new TestSuite('dapCtx.sub()', {
 
 }).runTests();
 
-const ctx3 = new dapCtx(3);
+const ctx3 = new DapContext(3);
 
-new TestSuite('dapCtx.mul()', {
+new TestSuite('DapContext.mul()', {
   // --- prec-1 branch: mProd has 2*prec-1 = 13 digits ---
 
   'prec-1, no round': () => {
@@ -469,7 +469,7 @@ new TestSuite('dapCtx.mul()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.div()', {
+new TestSuite('DapContext.div()', {
   // --- prec+1 branch: q = floor(|a.m| * base / |b.m|) has prec+1 digits ---
 
   'prec+1, no round': () => {
@@ -559,7 +559,7 @@ new TestSuite('dapCtx.div()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.sqrt()', {
+new TestSuite('DapContext.sqrt()', {
   'zero': () => {
     assertDeepEqual(ctx.sqrt(ctx.n('0')), n(0n, 0));
   },
@@ -618,7 +618,7 @@ new TestSuite('dapCtx.sqrt()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.neg()', {
+new TestSuite('DapContext.neg()', {
   'zero': () => {
     // -0n === 0n in BigInt, so result is canonical zero
     assertDeepEqual(ctx.neg(ctx.n('0')), ctx.n('0'));
@@ -638,7 +638,7 @@ new TestSuite('dapCtx.neg()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.trunc()', {
+new TestSuite('DapContext.trunc()', {
   'zero': () => {
     assertDeepEqual(ctx.trunc(ctx.n('0')), n(0n, 0));
   },
@@ -676,7 +676,7 @@ new TestSuite('dapCtx.trunc()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.round()', {
+new TestSuite('DapContext.round()', {
   'zero': () => {
     assertDeepEqual(ctx.round(ctx.n('0')), n(0n, 0));
   },
@@ -727,7 +727,7 @@ new TestSuite('dapCtx.round()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.floor()', {
+new TestSuite('DapContext.floor()', {
   'zero': () => {
     assertDeepEqual(ctx.floor(ctx.n('0')), n(0n, 0));
   },
@@ -774,7 +774,7 @@ new TestSuite('dapCtx.floor()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.ceil()', {
+new TestSuite('DapContext.ceil()', {
   'zero': () => {
     assertDeepEqual(ctx.ceil(ctx.n('0')), n(0n, 0));
   },
@@ -820,7 +820,7 @@ new TestSuite('dapCtx.ceil()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.mod()', {
+new TestSuite('DapContext.mod()', {
   'basic': () => {
     // 7 - 3*floor(7/3) = 7 - 6 = 1
     assertDeepEqual(ctx.mod(ctx.n('7'), ctx.n('3')), ctx.n('1'));
@@ -863,7 +863,7 @@ new TestSuite('dapCtx.mod()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.ln()', {
+new TestSuite('DapContext.ln()', {
   'ln(1) = 0': () => {
     assertEqual(ctx.toString(ctx.ln(ctx.n('1'))), '0');
   },
@@ -898,7 +898,7 @@ new TestSuite('dapCtx.ln()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.exp()', {
+new TestSuite('DapContext.exp()', {
   'exp(0) = 1': () => {
     assertDeepEqual(ctx.exp(ctx.n('0')), ctx.n('1'));
   },
@@ -921,7 +921,7 @@ new TestSuite('dapCtx.exp()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.pow()', {
+new TestSuite('DapContext.pow()', {
   'a^0 = 1': () => {
     assertDeepEqual(ctx.pow(ctx.n('5'), ctx.n('0')), ctx.n('1'));
   },
@@ -964,7 +964,7 @@ new TestSuite('dapCtx.pow()', {
 
 }).runTests();
 
-new TestSuite('dapCtx.atanh()', {
+new TestSuite('DapContext.atanh()', {
   'atanh(0) = 0': () => {
     assertEqual(ctx.toString(ctx.atanh(ctx.n('0'))), '0');
   },

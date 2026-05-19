@@ -1,4 +1,4 @@
-export function dapCtx(prec) {
+export function DapContext(prec) {
   this.prec = prec;
   this.base = 10n ** BigInt(this.prec);
   this.baseSq = this.base * this.base;
@@ -15,7 +15,7 @@ export function dapCtx(prec) {
   this.halfPow10[prec] = this.halfBase;
 }
 
-dapCtx.prototype.n = function(m, e) {
+DapContext.prototype.n = function(m, e) {
   if (typeof m === 'number') m = String(m);
   if (typeof m === 'string') {
     const neg = m[0] === '-';
@@ -59,7 +59,7 @@ dapCtx.prototype.n = function(m, e) {
   return { m: normalized, e };
 };
 
-dapCtx.prototype.toString = function(a) {
+DapContext.prototype.toString = function(a) {
   if (a.m === 0n) return '0';
   const neg = a.m < 0n;
   const abs = neg ? -a.m : a.m;
@@ -83,7 +83,7 @@ dapCtx.prototype.toString = function(a) {
 // Compares sign → exponent → mantissa with no subtraction.
 // Assumes normalized mantissas (prec significant digits); results are
 // unspecified for non-canonical values produced by heavy cancellation.
-dapCtx.prototype.cmp = function(a, b) {
+DapContext.prototype.cmp = function(a, b) {
   const sa = a.m > 0n ? 1 : a.m < 0n ? -1 : 0;
   const sb = b.m > 0n ? 1 : b.m < 0n ? -1 : 0;
   if (sa !== sb) return sa > sb ? 1 : -1;
@@ -96,14 +96,14 @@ dapCtx.prototype.cmp = function(a, b) {
   return a.m > b.m ? 1 : a.m < b.m ? -1 : 0;
 };
 
-dapCtx.prototype.eq = function(a, b) { return this.cmp(a, b) === 0; };
-dapCtx.prototype.equals = dapCtx.prototype.eq;
-dapCtx.prototype.gt = function(a, b) { return this.cmp(a, b) > 0; };
-dapCtx.prototype.lt = function(a, b) { return this.cmp(a, b) < 0; };
-dapCtx.prototype.gte = function(a, b) { return this.cmp(a, b) >= 0; };
-dapCtx.prototype.lte = function(a, b) { return this.cmp(a, b) <= 0; };
+DapContext.prototype.eq = function(a, b) { return this.cmp(a, b) === 0; };
+DapContext.prototype.equals = DapContext.prototype.eq;
+DapContext.prototype.gt = function(a, b) { return this.cmp(a, b) > 0; };
+DapContext.prototype.lt = function(a, b) { return this.cmp(a, b) < 0; };
+DapContext.prototype.gte = function(a, b) { return this.cmp(a, b) >= 0; };
+DapContext.prototype.lte = function(a, b) { return this.cmp(a, b) <= 0; };
 
-dapCtx.prototype.add = function(a, b) {
+DapContext.prototype.add = function(a, b) {
   // Ensure a has the larger (or equal) exponent
   if (a.e < b.e) {
     let tmp = a;
@@ -143,11 +143,11 @@ dapCtx.prototype.add = function(a, b) {
   return { m, e };
 };
 
-dapCtx.prototype.sub = function(a, b) {
+DapContext.prototype.sub = function(a, b) {
   return this.add(a, { m: -b.m, e: b.e });
 };
 
-dapCtx.prototype.mul = function(a, b) {
+DapContext.prototype.mul = function(a, b) {
   // a.m * 10^(a.e - prec) * b.m * 10^(b.e - prec)
   // = (a.m * b.m) * 10^(a.e + b.e - 2prec)
   // = (a.m * b.m) / 10^prec * 10^(a.e + b.e - prec)  (2prec digs in mProd)
@@ -186,7 +186,7 @@ dapCtx.prototype.mul = function(a, b) {
   return { m, e };
 };
 
-dapCtx.prototype.div = function(a, b) {
+DapContext.prototype.div = function(a, b) {
   // a.m * 10^(a.e-prec) / (b.m * 10^(b.e-prec)) = (a.m/b.m) * 10^(a.e-b.e)
   // Multiply a.m by base before dividing so q has prec (or prec+1) digits.
   // q >= base  →  prec+1 digits, drop last with rounding,  e = a.e - b.e + 1
@@ -214,7 +214,7 @@ dapCtx.prototype.div = function(a, b) {
   return { m: sign ? -m : m, e };
 };
 
-dapCtx.prototype.sqrt = function(a) {
+DapContext.prototype.sqrt = function(a) {
   if (a.m === 0n) return { m: 0n, e: 0 };
 
   // value = a.m * 10^(a.e - prec)
@@ -248,11 +248,11 @@ dapCtx.prototype.sqrt = function(a) {
   return { m, e };
 };
 
-dapCtx.prototype.neg = function(a) {
+DapContext.prototype.neg = function(a) {
   return { m: -a.m, e: a.e };
 };
 
-dapCtx.prototype.trunc = function(a) {
+DapContext.prototype.trunc = function(a) {
   if (a.e < 0) return { m: 0n, e: 0 };
   if (a.e >= this.prec) return a;
   const frac = this.prec - a.e;
@@ -261,7 +261,7 @@ dapCtx.prototype.trunc = function(a) {
   return this.n(q, a.e);
 };
 
-dapCtx.prototype.round = function(a) {
+DapContext.prototype.round = function(a) {
   if (a.e < 0) return { m: 0n, e: 0 };
   if (a.e >= this.prec) return a;
   const frac = this.prec - a.e;
@@ -274,7 +274,7 @@ dapCtx.prototype.round = function(a) {
   return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
 };
 
-dapCtx.prototype.floor = function(a) {
+DapContext.prototype.floor = function(a) {
   if (a.e < 0) return a.m < 0n ? this.n(-1n, 1) : { m: 0n, e: 0 };
   if (a.e >= this.prec) return a;
   const frac = this.prec - a.e;
@@ -286,7 +286,7 @@ dapCtx.prototype.floor = function(a) {
   return this.n(q, absQ >= this.pow10[a.e] ? a.e + 1 : a.e);
 };
 
-dapCtx.prototype.ceil = function(a) {
+DapContext.prototype.ceil = function(a) {
   if (a.e < 0) return a.m > 0n ? this.n(1n, 1) : { m: 0n, e: 0 };
   if (a.e >= this.prec) return a;
   const frac = this.prec - a.e;
@@ -299,11 +299,11 @@ dapCtx.prototype.ceil = function(a) {
 };
 
 // Floored modulo: result has the same sign as b (a - b*floor(a/b))
-dapCtx.prototype.mod = function(a, b) {
+DapContext.prototype.mod = function(a, b) {
   return this.sub(a, this.mul(b, this.floor(this.div(a, b))));
 };
 
-dapCtx.prototype.ln = function(a) {
+DapContext.prototype.ln = function(a) {
   if (a.m <= 0n) throw new Error('ln: argument must be positive');
   // Write a = r * 2^k * 10^(a.e-1), r ∈ [1,2)
   // ln(a) = 2*atanh((r-1)/(r+1)) + k*ln(2) + (a.e-1)*ln(10)
@@ -331,7 +331,7 @@ dapCtx.prototype.ln = function(a) {
   return result;
 };
 
-dapCtx.prototype.exp = function(a) {
+DapContext.prototype.exp = function(a) {
   if (a.m === 0n) return this.n('1');
   // Negative: use exp(-x) = 1/exp(x) to avoid cancellation in the alternating series
   if (a.m < 0n) return this.div(this.n('1'), this.exp(this.neg(a)));
@@ -349,7 +349,7 @@ dapCtx.prototype.exp = function(a) {
   return sum;
 };
 
-dapCtx.prototype.pow = function(a, b) {
+DapContext.prototype.pow = function(a, b) {
   if (b.m === 0n) return this.n('1');
   if (a.m === 0n) return { m: 0n, e: 0 };
 
@@ -396,7 +396,7 @@ dapCtx.prototype.pow = function(a, b) {
 // terms shrink by a factor of 1/9 each step, reaching 10^-prec in ~prec/2
 // iterations.  The series is used internally by ln() via the identity:
 //   ln(r) = 2·atanh((r−1)/(r+1)),  r ∈ [1, 2)  →  t ∈ [0, 1/3)
-dapCtx.prototype.atanh = function(t) {
+DapContext.prototype.atanh = function(t) {
   const t2 = this.mul(t, t);
   let term = t;
   let sum = t;
